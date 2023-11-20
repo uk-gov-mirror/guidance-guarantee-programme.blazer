@@ -271,7 +271,7 @@ module Blazer
           # not ideal, but useful for testing
           raise Error, @error if @error && Rails.env.test?
 
-          data = csv_data(@columns, @rows, @data_source)
+          data = csv_data(@columns, @rows, @data_source, @smart_values)
           filename = "#{@query.try(:name).try(:parameterize).presence || 'query'}.csv"
           send_data data, type: "text/csv; charset=utf-8", disposition: "attachment", filename: filename
         end
@@ -369,13 +369,21 @@ module Blazer
       params[:blazer] || {}
     end
 
-    def csv_data(columns, rows, data_source)
+    def csv_data(columns, rows, data_source, smart_values)
       CSV.generate do |csv|
         csv << columns
         rows.each do |row|
-          csv << row.each_with_index.map { |v, i| v.is_a?(Time) ? blazer_time_value(data_source, columns[i], v) : v }
+          csv << row.each_with_index.map do |v, i|
+            v.is_a?(Time) ? blazer_time_value(data_source, columns[i], v) : csv_smart_value(columns[i], v, smart_values)
+          end
         end
       end
+    end
+
+    def csv_smart_value(column, value, smart_values)
+      return value unless (result = smart_values[column])
+
+      result[value.to_s] || value
     end
 
     def blazer_time_value(data_source, k, v)
